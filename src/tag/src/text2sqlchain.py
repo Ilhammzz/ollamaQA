@@ -4,7 +4,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
 from dotenv import load_dotenv
 import os
-
+import re
 # Load environment variables dari .env
 # load_dotenv()
 # api_key = os.getenv("GEMINI_API_TOKEN")
@@ -145,6 +145,16 @@ def get_sql_chain(llm, mode="zero-shot"):
 # sql_chain_zero = LLMChain(llm=llm, prompt=POSTGRES_PROMPT_ID)
 # sql_chain_fewshot = LLMChain(llm=llm, prompt=POSTGRES_PROMPT_FEWSHOT_ID)
 
+def fix_ilike_for_integers(sql: str) -> str:
+    """
+    Deteksi dan ganti penggunaan ILIKE pada kolom integer menjadi operator '='
+    """
+    int_cols = ['r.year', 'r.number', 'a.article_number']
+    for col in int_cols:
+        pattern = rf"{col}\s+ILIKE\s+'%(\d+)%'"
+        sql = re.sub(pattern, rf"{col} = \1", sql)
+    return sql
+
 # ============================ GENERATE SQL ============================
 def generate_sql(schema: str, question: str, top_k: int = 100, shot_mode: str = "zero-shot", llm_mode: str = "gemini") -> str:
     """
@@ -164,4 +174,8 @@ def generate_sql(schema: str, question: str, top_k: int = 100, shot_mode: str = 
         "table_info": schema,
         "top_k": top_k
     }
-    return chain.run(inputs).strip()
+    query_raw = chain.run(inputs).strip()
+    query_fixed = fix_ilike_for_integers(query_raw)
+    return query_fixed
+    #return chain.run(inputs).strip()
+    
