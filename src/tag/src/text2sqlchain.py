@@ -96,8 +96,8 @@ Tugasmu adalah mengubah pertanyaan hukum dari pengguna menjadi query SQL Postgre
 {table_info}
 
 Ikuti aturan berikut:
-- Gunakan HANYA nama tabel dan kolom yang terdapat di `{table_info}`.
-- Jangan membuat asumsi nama tabel atau kolom yang tidak ada dalam struktur database.
+- Gunakan HANYA nama tabel dan kolom yang terdapat di {table_info}.
+- Jangan membuat asumsi nama tabel atau kolom yang tidak ada dalam {table_info}.
 - Jangan gunakan SELECT *. Ambil hanya kolom yang relevan untuk menjawab pertanyaan.
 - Gunakan ILIKE untuk pencocokan teks jika pengguna menanyakan isi pasal atau konten hukum.
 - Jika pertanyaan menyebutkan pelaku hukum tertentu seperti "penyelenggara sistem elektronik", "pemerintah", atau "masyarakat", maka pastikan klausa pencarian juga mencakup entitas tersebut menggunakan ILIKE.
