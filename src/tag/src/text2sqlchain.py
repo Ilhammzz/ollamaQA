@@ -97,7 +97,7 @@ Perhatikan struktur tabel berikut ini:
 
 Ikuti peraturan ketat berikut:
 
-1. **JANGAN** membuat atau menebak nama kolom atau nama tabel. Hanya gunakan nama kolom dan nama tabel **yang benar-benar ada** di atas ({table_info}).
+1. **JANGAN** membuat atau menebak nama kolom atau nama tabel. Jika kamu menyebutkan kolom yang tidak ada di {table_info}, jawabanmu akan dianggap SALAH. Gunakan hanya kolom yang secara eksplisit ditampilkan.
 2. **JANGAN gunakan SELECT \***. Hanya ambil kolom yang relevan.
 3. Jika ada lebih dari satu tabel, selalu gunakan alias tabel untuk menghindari ambiguitas (contoh: `a.article_number`, `r.title`).
 4. Untuk pencarian isi teks atau konten hukum, gunakan `ILIKE '%kata%'`.
@@ -147,23 +147,23 @@ def get_sql_chain(llm, mode="zero-shot"):
 # sql_chain_zero = LLMChain(llm=llm, prompt=POSTGRES_PROMPT_ID)
 # sql_chain_fewshot = LLMChain(llm=llm, prompt=POSTGRES_PROMPT_FEWSHOT_ID)
 
-def fix_ilike_for_integers(sql: str) -> str:
-    """
-    Ganti ILIKE '%angka%' dengan '='.
-    - Kolom integer → tanpa kutip
-    - Kolom teks → dengan kutip
-    """
-    int_cols = ['regulations.year', 'regulations.number', 'articles.chapter_number', 'reglations.amendment']
-    for col in int_cols:
-        pattern = rf"{col}\s+ILIKE\s+'%(\d+)%'"
-        sql = re.sub(pattern, rf"{col} = \1", sql)
+# def fix_ilike_for_integers(sql: str) -> str:
+#     """
+#     Ganti ILIKE '%angka%' dengan '='.
+#     - Kolom integer → tanpa kutip
+#     - Kolom teks → dengan kutip
+#     """
+#     int_cols = ['regulations.year', 'regulations.number', 'articles.chapter_number', 'reglations.amendment']
+#     for col in int_cols:
+#         pattern = rf"{col}\s+ILIKE\s+'%(\d+)%'"
+#         sql = re.sub(pattern, rf"{col} = \1", sql)
 
-    str_cols = ['articles.article_number']
-    for col in str_cols:
-        pattern = rf"{col}\s+ILIKE\s+'%(\d+)%'"
-        sql = re.sub(pattern, rf"{col} = '\1'", sql)
+#     str_cols = ['articles.article_number']
+#     for col in str_cols:
+#         pattern = rf"{col}\s+ILIKE\s+'%(\d+)%'"
+#         sql = re.sub(pattern, rf"{col} = '\1'", sql)
 
-    return sql
+#     return sql
 
 
 def remove_invalid_columns(sql: str, valid_columns: list) -> str:
