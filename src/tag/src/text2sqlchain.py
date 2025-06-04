@@ -62,7 +62,7 @@ JOIN regulations r ON a.regulation_id = r.id
 WHERE 
 r.short_type = 'PERMENKOMINFO' AND 
 r.number = '4' AND 
-r.YEAR = '2016' AND 
+r.YEAR = 2016 AND 
 a.article_number = '10'
 LIMIT {top_k};
 
@@ -83,7 +83,7 @@ JOIN
 WHERE
     r.short_type = 'PERMENKOMINFO'
     AND r.number = '26'
-    AND r.year = '2007'
+    AND r.year = 2007
     AND a.status = 'ineffective'
 ```
 """
@@ -115,7 +115,7 @@ Pertanyaan: Apa isi Pasal 10 dari PERMENKOMINFO Nomor 4 Tahun 2016?
 SELECT a.article_number, a.text
 FROM articles a
 JOIN regulations r ON a.regulation_id = r.id
-WHERE r.short_type = 'PERMENKOMINFO' AND r.number = '4' AND r.year = '2016' AND a.article_number = '10'
+WHERE r.short_type = 'PERMENKOMINFO' AND r.number = '4' AND r.year = 2016 AND a.article_number = '10'
 LIMIT {top_k};
 """
 
