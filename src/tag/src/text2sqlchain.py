@@ -145,14 +145,22 @@ def get_sql_chain(llm, mode="zero-shot"):
 # sql_chain_zero = LLMChain(llm=llm, prompt=POSTGRES_PROMPT_ID)
 # sql_chain_fewshot = LLMChain(llm=llm, prompt=POSTGRES_PROMPT_FEWSHOT_ID)
 
+# Perbaiki ILIKE untuk kolom integer
 def fix_ilike_for_integers(sql: str) -> str:
-    """
-    Deteksi dan ganti penggunaan ILIKE pada kolom integer menjadi operator '='
-    """
     int_cols = ['r.year']
     for col in int_cols:
         pattern = rf"{col}\s+ILIKE\s+'%(\d+)%'"
         sql = re.sub(pattern, rf"{col} = \1", sql)
+    return sql
+
+# Filter kolom tidak valid
+def remove_invalid_columns(sql: str, valid_columns: list) -> str:
+    tokens = re.findall(r"\b([a-z]\.)?[a-zA-Z_]+\b", sql)
+    for token in tokens:
+        if token not in valid_columns:
+            # Hapus kondisi WHERE atau JOIN yang mengandung kolom tidak valid
+            sql = re.sub(rf"\b{re.escape(token)}\b\s*=\s*[^ \n]+", "-- removed_invalid_column", sql)
+            sql = re.sub(rf"AND\s+-- removed_invalid_column", "", sql)
     return sql
 
 # ============================ GENERATE SQL ============================
@@ -174,8 +182,27 @@ def generate_sql(schema: str, question: str, top_k: int = 100, shot_mode: str = 
         "table_info": schema,
         "top_k": top_k
     }
-    query_raw = chain.run(inputs).strip()
-    query_fixed = fix_ilike_for_integers(query_raw)
-    return query_fixed
+    try:
+        raw_sql = chain.run(inputs).strip()
+    except Exception as e:
+        return f"SELECT 'Gagal membangkitkan query karena LLM error: {str(e)}';"
+
+    # Perbaikan otomatis
+    fixed_sql = fix_ilike_for_integers(raw_sql)
+
+    # Kolom yang valid (sesuaikan dengan skema kamu)
+    valid_cols = [
+        'a.article_number', 'a.text', 'a.title', 'a.status', 'a.id', 'a.regulation_id',
+        'r.id', 'r.title', 'r.short_type', 'r.type', 'r.number', 'r.year', 'r.status',
+        'd.id', 'd.name', 'd.definition', 'd.regulation_id'
+    ]
+
+    cleaned_sql = remove_invalid_columns(fixed_sql, valid_cols)
+
+    # Jika hasil akhir kosong karena semua klausa dibersihkan
+    if "-- removed_invalid_column" in cleaned_sql and cleaned_sql.count("SELECT") == 1:
+        return "SELECT 'Query gagal dibuat karena banyak kolom tidak sesuai skema';"
+
+    return cleaned_sql
     #return chain.run(inputs).strip()
     
