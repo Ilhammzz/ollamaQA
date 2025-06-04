@@ -101,7 +101,7 @@ Ikuti peraturan ketat berikut:
 2. **JANGAN gunakan SELECT \***. Hanya ambil kolom yang relevan.
 3. Jika ada lebih dari satu tabel, selalu gunakan alias tabel untuk menghindari ambiguitas (contoh: `a.article_number`, `r.title`).
 4. Untuk pencarian isi teks atau konten hukum, gunakan `ILIKE '%kata%'`.
-5. Untuk kolom regulation.year yang bertipe angka (integer), seperti `year` gunakan operator `=` saja (bukan ILIKE).
+5. Untuk kolom regulations.year yang bertipe angka (integer), seperti `year` gunakan operator `=` saja (bukan ILIKE).
 6. Jika kamu tidak yakin nama kolomnya, lebih baik kosongkan atau gunakan hanya kolom yang ada seperti `title`, `text`, `year`, `number`, `article_number`, `name`, atau `status`.
 7. Jika pengguna menanyakan hal yang tidak bisa dijawab hanya dengan skema ini, hasilkan query kosong:
 ```sql
@@ -153,17 +153,18 @@ def get_sql_chain(llm, mode="zero-shot"):
 
 def fix_ilike_for_integers(sql: str) -> str:
     """
-    Ganti ILIKE '%angka%' dengan '=' untuk kolom integer (tanpa kutip),
-    dan '=' untuk kolom teks (dengan kutip).
+    Ganti ILIKE '%angka%' dengan '='.
+    - Untuk kolom bertipe integer → tanpa kutip
+    - Untuk kolom bertipe teks → dengan kutip
     """
     # Kolom yang pasti bertipe integer
-    int_cols = ['r.year']
+    int_cols = ['regulations.year']
     for col in int_cols:
         pattern = rf"{col}\s+ILIKE\s+'%(\d+)%'"
         sql = re.sub(pattern, rf"{col} = \1", sql)
 
     # Kolom teks numerik (seperti r.number) tetap pakai string literal
-    str_cols = ['r.number', 'a.article_number']
+    str_cols = ['regulations.number', 'articles.article_number', 'articles.chapter_number']
     for col in str_cols:
         pattern = rf"{col}\s+ILIKE\s+'%(\d+)%'"
         sql = re.sub(pattern, rf"{col} = '\1'", sql)
