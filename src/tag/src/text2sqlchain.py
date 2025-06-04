@@ -103,7 +103,7 @@ Ikuti peraturan ketat berikut:
 2. **JANGAN gunakan SELECT \***. Hanya ambil kolom yang relevan.
 3. Jika ada lebih dari satu tabel, selalu gunakan alias tabel untuk menghindari ambiguitas (contoh: `a.article_number`, `r.title`).
 4. Untuk pencarian isi teks atau konten hukum, gunakan `ILIKE '%kata%'`.
-5. **JANGAN PERNAH** menggunakan `ILIKE` untuk kolom angka (seperti tahun, nomor, dll). Gunakan operator yang sesuai seperti `=`, `>`, `<`, dll.
+5. **JANGAN PERNAH** menggunakan `ILIKE` untuk kolom yang memiliki data type integer. Gunakan operator yang sesuai seperti `=`, `>`, `<`, dll.
 6. Jika kamu tidak yakin nama kolomnya, lebih baik kosongkan atau gunakan hanya kolom yang ada seperti `title`, `text`, `year`, `number`, `article_number`, `name`, atau `status`.
 7. Jika pertanyaan mengandung istilah seperti “arti istilah” atau “definisi”, gunakan tabel `definitions`.
 8. Untuk isi pasal, kewajiban, hak, sanksi, gunakan tabel `articles` dan JOIN ke `regulations`.
