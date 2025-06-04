@@ -103,16 +103,12 @@ Ikuti peraturan ketat berikut:
 4. Untuk pencarian isi teks atau konten hukum, gunakan `ILIKE '%kata%'`.
 5. Untuk kolom regulations.year yang bertipe angka (integer), seperti `year` gunakan operator `=` saja (bukan ILIKE).
 6. Jika kamu tidak yakin nama kolomnya, lebih baik kosongkan atau gunakan hanya kolom yang ada seperti `title`, `text`, `year`, `number`, `article_number`, `name`, atau `status`.
-7. Jika pengguna menanyakan hal yang tidak bisa dijawab hanya dengan skema ini, hasilkan query kosong:
-```sql
-SELECT article_number FROM articles a WHERE a.article_number = '9999'
-```
-8. Jika pertanyaan mengandung istilah seperti “arti istilah” atau “definisi”, gunakan tabel `definitions`.
-9. Untuk isi pasal, kewajiban, hak, sanksi, gunakan tabel `articles` dan JOIN ke `regulations`.
-10. Jika menyebutkan jenis peraturan (seperti 'PERMENKOMINFO', 'UU'), filter pakai `short_type`, `number`, dan `year`.
-11. Selalu tambahkan `LIMIT {top_k}` di akhir query, kecuali diminta sebaliknya.
-12. Jika tidak yakin dengan query, **lebih baik hasilkan query kosong** (`SELECT 'Query tidak dapat dibuat dengan informasi yang tersedia';`) daripada membuat query yang akan error.
-13. Format akhir HARUS dibungkus dalam blok ```sql ... ``` tanpa penjelasan tambahan apa pun.
+7. Jika pertanyaan mengandung istilah seperti “arti istilah” atau “definisi”, gunakan tabel `definitions`.
+8. Untuk isi pasal, kewajiban, hak, sanksi, gunakan tabel `articles` dan JOIN ke `regulations`.
+9. Jika menyebutkan jenis peraturan (seperti 'PERMENKOMINFO', 'UU'), filter pakai `short_type`, `number`, dan `year`.
+10. Selalu tambahkan `LIMIT {top_k}` di akhir query, kecuali diminta sebaliknya.
+11. Jika tidak yakin dengan query, **lebih baik hasilkan query kosong** (`SELECT 'Query tidak dapat dibuat dengan informasi yang tersedia';`) daripada membuat query yang akan error.
+12. Format akhir HARUS dibungkus dalam blok ```sql ... ``` tanpa penjelasan tambahan apa pun.
 
 Contoh:
 Pertanyaan: Apa isi Pasal 10 dari PERMENKOMINFO Nomor 4 Tahun 2016?
@@ -157,12 +153,12 @@ def fix_ilike_for_integers(sql: str) -> str:
     - Kolom integer → tanpa kutip
     - Kolom teks → dengan kutip
     """
-    int_cols = ['regulations.year']
+    int_cols = ['regulations.year', 'regulations.number', 'articles.chapter_number', 'reglations.amendment']
     for col in int_cols:
         pattern = rf"{col}\s+ILIKE\s+'%(\d+)%'"
         sql = re.sub(pattern, rf"{col} = \1", sql)
 
-    str_cols = ['regulations.number', 'articles.article_number']
+    str_cols = ['articles.article_number']
     for col in str_cols:
         pattern = rf"{col}\s+ILIKE\s+'%(\d+)%'"
         sql = re.sub(pattern, rf"{col} = '\1'", sql)
