@@ -34,6 +34,5 @@ def execute_text2sql_response(conn, response: str):
 
         return rows, columns
 
-    except Exception :
-        return [['tidak dapat mengeksekusi query']], ['kueri tidak valid']
-       
+    except Exception as e:
+        raise RuntimeError(f"Error executing SQL: {e}")
