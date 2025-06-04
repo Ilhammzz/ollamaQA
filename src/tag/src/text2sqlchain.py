@@ -149,7 +149,7 @@ def fix_ilike_for_integers(sql: str) -> str:
     """
     Deteksi dan ganti penggunaan ILIKE pada kolom integer menjadi operator '='
     """
-    int_cols = ['r.year', 'r.number', 'a.article_number']
+    int_cols = ['r.year']
     for col in int_cols:
         pattern = rf"{col}\s+ILIKE\s+'%(\d+)%'"
         sql = re.sub(pattern, rf"{col} = \1", sql)
