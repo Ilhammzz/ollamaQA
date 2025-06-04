@@ -145,7 +145,6 @@ def get_sql_chain(llm, mode="zero-shot"):
 # sql_chain_zero = LLMChain(llm=llm, prompt=POSTGRES_PROMPT_ID)
 # sql_chain_fewshot = LLMChain(llm=llm, prompt=POSTGRES_PROMPT_FEWSHOT_ID)
 
-# Perbaiki ILIKE untuk kolom integer
 def fix_ilike_for_integers(sql: str) -> str:
     int_cols = ['r.year']
     for col in int_cols:
@@ -153,56 +152,62 @@ def fix_ilike_for_integers(sql: str) -> str:
         sql = re.sub(pattern, rf"{col} = \1", sql)
     return sql
 
-# Filter kolom tidak valid
+# Hapus bagian yang menggunakan kolom tidak valid
 def remove_invalid_columns(sql: str, valid_columns: list) -> str:
     tokens = re.findall(r"\b([a-z]\.)?[a-zA-Z_]+\b", sql)
     for token in tokens:
         if token not in valid_columns:
-            # Hapus kondisi WHERE atau JOIN yang mengandung kolom tidak valid
             sql = re.sub(rf"\b{re.escape(token)}\b\s*=\s*[^ \n]+", "-- removed_invalid_column", sql)
             sql = re.sub(rf"AND\s+-- removed_invalid_column", "", sql)
     return sql
 
-# ============================ GENERATE SQL ============================
+# Ekstraksi isi dari blok ```sql ... ```
+def extract_sql_block(text: str) -> str:
+    match = re.search(r"```sql\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return None
+
+# Fungsi utama
 def generate_sql(schema: str, question: str, top_k: int = 100, shot_mode: str = "zero-shot", llm_mode: str = "gemini") -> str:
     """
-    Generate SQL query dari pertanyaan pengguna.
-
-    Args:
-        schema (str): Informasi struktur tabel.
-        question (str): Pertanyaan hukum dari user.
-        top_k (int): Batas maksimum hasil.
-        shot_mode (str): 'zero-shot' atau 'few-shot'
-        llm_mode (str): 'gemini' atau 'ollama'
+    Generate SQL query dari pertanyaan pengguna, dengan parsing dan validasi blok SQL.
     """
     llm = init_llm(llm_mode)
-    chain = get_sql_chain(llm, mode=shot_mode)
+    prompt = POSTGRES_PROMPT_FEWSHOT_ID if shot_mode == "few-shot" else POSTGRES_PROMPT_ID
+    chain = LLMChain(llm=llm, prompt=prompt)
+
     inputs = {
         "input": question,
         "table_info": schema,
         "top_k": top_k
     }
+
     try:
-        raw_sql = chain.run(inputs).strip()
+        raw_output = chain.run(inputs).strip()
     except Exception as e:
-        return f"SELECT 'Gagal membangkitkan query karena LLM error: {str(e)}';"
+        return "```sql\nSELECT 'Gagal membangkitkan query karena LLM error';\n```"
 
-    # Perbaikan otomatis
-    fixed_sql = fix_ilike_for_integers(raw_sql)
+    # Ambil isi blok ```sql ... ```
+    extracted_sql = extract_sql_block(raw_output)
+    if not extracted_sql:
+        return "```sql\nSELECT 'Tidak ditemukan blok ```sql dalam response.';\n```"
 
-    # Kolom yang valid (sesuaikan dengan skema kamu)
+    # Fix penggunaan ILIKE pada integer
+    fixed_sql = fix_ilike_for_integers(extracted_sql)
+
+    # Kolom yang valid (sesuaikan dengan struktur skemamu)
     valid_cols = [
         'a.article_number', 'a.text', 'a.title', 'a.status', 'a.id', 'a.regulation_id',
         'r.id', 'r.title', 'r.short_type', 'r.type', 'r.number', 'r.year', 'r.status',
         'd.id', 'd.name', 'd.definition', 'd.regulation_id'
     ]
-
     cleaned_sql = remove_invalid_columns(fixed_sql, valid_cols)
 
-    # Jika hasil akhir kosong karena semua klausa dibersihkan
-    if "-- removed_invalid_column" in cleaned_sql and cleaned_sql.count("SELECT") == 1:
-        return "SELECT 'Query gagal dibuat karena banyak kolom tidak sesuai skema';"
+    # Fallback jika query dibersihkan terlalu banyak
+    if not cleaned_sql.strip() or "-- removed_invalid_column" in cleaned_sql and "SELECT" not in cleaned_sql:
+        return "```sql\nSELECT 'Query gagal dibuat karena banyak kolom tidak sesuai skema';\n```"
 
-    return cleaned_sql
+    return f"```sql\n{cleaned_sql.strip()}\n```"
     #return chain.run(inputs).strip()
     
