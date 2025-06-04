@@ -101,7 +101,7 @@ Ikuti peraturan ketat berikut:
 2. **JANGAN gunakan SELECT \***. Hanya ambil kolom yang relevan.
 3. Jika ada lebih dari satu tabel, selalu gunakan alias tabel untuk menghindari ambiguitas (contoh: `a.article_number`, `r.title`).
 4. Untuk pencarian isi teks atau konten hukum, gunakan `ILIKE '%kata%'`.
-5. Untuk kolom regulations.year yang bertipe angka (integer), seperti `year` gunakan operator `=` saja (bukan ILIKE).
+5. Untuk kolom regulations.year yang bertipe angka (integer), seperti `regulations.year` `regulations.number` **JANGAN GUNAKAN ILIKE**. Gunakan operator `=`. Jika kamu menggunakan ILIKE untuk kolom angka maka query mu akan ERROR.
 6. Jika kamu tidak yakin nama kolomnya, lebih baik kosongkan atau gunakan hanya kolom yang ada seperti `title`, `text`, `year`, `number`, `article_number`, `name`, atau `status`.
 7. Jika pertanyaan mengandung istilah seperti “arti istilah” atau “definisi”, gunakan tabel `definitions`.
 8. Untuk isi pasal, kewajiban, hak, sanksi, gunakan tabel `articles` dan JOIN ke `regulations`.
@@ -109,6 +109,8 @@ Ikuti peraturan ketat berikut:
 10. Selalu tambahkan `LIMIT {top_k}` di akhir query, kecuali diminta sebaliknya.
 11. Jika tidak yakin dengan query, **lebih baik hasilkan query kosong** (`SELECT 'Query tidak dapat dibuat dengan informasi yang tersedia';`) daripada membuat query yang akan error.
 12. Format akhir HARUS dibungkus dalam blok ```sql ... ``` tanpa penjelasan tambahan apa pun.
+13. Jika kamu membuat query dengan kolom atau operator yang salah, hasilnya akan dianggap **invalid**. Pastikan query aman dan benar-benar bisa dieksekusi tanpa error.
+
 
 Contoh:
 Pertanyaan: Apa isi Pasal 10 dari PERMENKOMINFO Nomor 4 Tahun 2016?
