@@ -154,12 +154,21 @@ def fix_ilike_for_integers(sql: str) -> str:
 
 # Hapus bagian yang menggunakan kolom tidak valid
 def remove_invalid_columns(sql: str, valid_columns: list) -> str:
-    tokens = re.findall(r"\b([a-z]\.)?[a-zA-Z_]+\b", sql)
-    for token in tokens:
-        if token not in valid_columns:
-            sql = re.sub(rf"\b{re.escape(token)}\b\s*=\s*[^ \n]+", "-- removed_invalid_column", sql)
-            sql = re.sub(rf"AND\s+-- removed_invalid_column", "", sql)
+    """
+    Menghapus kondisi WHERE/JOIN yang mengandung kolom tidak dikenal dari SQL.
+    """
+    # Pola: alias.nama_kolom atau nama_kolom saja
+    pattern = re.compile(r"([a-zA-Z_]+\.[a-zA-Z_]+|[a-zA-Z_]+)\s*(=|ILIKE|IN|>|<|!=)\s*[^ \n()]+", re.IGNORECASE)
+
+    for match in pattern.finditer(sql):
+        col = match.group(1)
+        if col not in valid_columns:
+            full_expr = match.group(0)
+            # Hapus ekspresi beserta klausa logika (AND/OR)
+            sql = re.sub(rf"(\bAND\b|\bOR\b)?\s*{re.escape(full_expr)}", "", sql)
+
     return sql
+
 
 # Ekstraksi isi dari blok ```sql ... ```
 def extract_sql_block(text: str) -> str:
