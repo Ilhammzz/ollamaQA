@@ -154,44 +154,81 @@ def get_sql_chain(llm, mode="zero-shot"):
 def fix_ilike_for_integers(sql: str) -> str:
     """
     Ganti ILIKE '%angka%' dengan '='.
-    - Untuk kolom bertipe integer → tanpa kutip
-    - Untuk kolom bertipe teks → dengan kutip
+    - Kolom integer → tanpa kutip
+    - Kolom teks → dengan kutip
     """
-    # Kolom yang pasti bertipe integer
     int_cols = ['regulations.year']
     for col in int_cols:
         pattern = rf"{col}\s+ILIKE\s+'%(\d+)%'"
         sql = re.sub(pattern, rf"{col} = \1", sql)
 
-    # Kolom teks numerik (seperti r.number) tetap pakai string literal
-    str_cols = ['regulations.number', 'articles.article_number', 'articles.chapter_number']
+    str_cols = ['regulations.number', 'articles.article_number']
     for col in str_cols:
         pattern = rf"{col}\s+ILIKE\s+'%(\d+)%'"
         sql = re.sub(pattern, rf"{col} = '\1'", sql)
 
     return sql
 
-# ============================ GENERATE SQL ============================
+
+def remove_invalid_columns(sql: str, valid_columns: list) -> str:
+    """
+    Hapus kondisi WHERE/JOIN yang menggunakan kolom yang tidak ada dalam skema.
+    """
+    expr_pattern = re.compile(r"(\b\w+\.\w+\b)\s*(=|ILIKE|>|<|!=)\s*('[^']*'|\d+)", re.IGNORECASE)
+
+    for match in expr_pattern.finditer(sql):
+        full_expr = match.group(0)
+        col = match.group(1)
+
+        if col not in valid_columns:
+            # Hapus seluruh ekspresi dan AND/OR yang terkait
+            sql = re.sub(rf"(\s*(AND|OR)\s*)?{re.escape(full_expr)}", "", sql, flags=re.IGNORECASE)
+
+    sql = re.sub(r"\s+", " ", sql).strip()
+    sql = re.sub(r"\b(WHERE|AND|OR)\s*($|;)", "", sql, flags=re.IGNORECASE)
+    return sql
+
+
 def generate_sql(schema: str, question: str, top_k: int = 100, shot_mode: str = "zero-shot", llm_mode: str = "gemini") -> str:
     """
-    Generate SQL query dari pertanyaan pengguna.
-
-    Args:
-        schema (str): Informasi struktur tabel.
-        question (str): Pertanyaan hukum dari user.
-        top_k (int): Batas maksimum hasil.
-        shot_mode (str): 'zero-shot' atau 'few-shot'
-        llm_mode (str): 'gemini' atau 'ollama'
+    Menghasilkan SQL aman dari LLM, perbaiki ILIKE integer dan bersihkan kolom tak valid.
     """
     llm = init_llm(llm_mode)
     chain = get_sql_chain(llm, mode=shot_mode)
+
     inputs = {
         "input": question,
         "table_info": schema,
         "top_k": top_k
     }
-    query_raw = chain.run(inputs).strip()
-    query_fixed = fix_ilike_for_integers(query_raw)
-    return query_fixed
+
+    response = chain.run(inputs).strip()
+
+    try:
+        from query_executor import extract_sql_query_from_response  # Sesuaikan
+        raw_sql = extract_sql_query_from_response(response)
+        fixed_sql = fix_ilike_for_integers(raw_sql)
+
+        valid_columns = [
+            'article_relations.from_article_id', 'article_relations.to_article_id', 
+            'article_relations.relation_type', 'articles.id', 'articles.regulation_id', 
+            'articles.chapter_number', 'articles.chapter_about', 'articles.article_number', 
+            'articles.text', 'articles.status', 'articles.title', 'definitions.id', 
+            'definitions.regulation_id', 'definitions.name', 'definitions.definition', 
+            'regulation_relations.from_regulation_id', 'regulation_relations.to_regulation_id', 
+            'regulation_relations.relation_type', 'regulations.id', 'regulations.url', 
+            'regulations.download_link', 'regulations.title', 'regulations.about', 'regulations.type', 
+            'regulations.short_type', 'regulations.amendment', 'regulations.number', 'regulations.year', 
+            'regulations.institution', 'regulations.issue_place', 'regulations.issue_date', 
+            'regulations.effective_date', 'regulations.observation', 'regulations.consideration', 
+            'status.id', 'status.repealed', 'status.repeal', 'status.amended', 'status.amend', 'subjects.id', 
+            'subjects.subject'
+        ]
+        cleaned_sql = remove_invalid_columns(fixed_sql, valid_columns)
+
+        return f"```sql\n{cleaned_sql.strip()}\n```"
+
+    except Exception:
+        return response
     #return chain.run(inputs).strip()
     
