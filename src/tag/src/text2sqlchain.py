@@ -153,12 +153,21 @@ def get_sql_chain(llm, mode="zero-shot"):
 
 def fix_ilike_for_integers(sql: str) -> str:
     """
-    Deteksi dan ganti penggunaan ILIKE pada kolom integer menjadi operator '='
+    Ganti ILIKE '%angka%' dengan '=' untuk kolom integer (tanpa kutip),
+    dan '=' untuk kolom teks (dengan kutip).
     """
+    # Kolom yang pasti bertipe integer
     int_cols = ['r.year']
     for col in int_cols:
         pattern = rf"{col}\s+ILIKE\s+'%(\d+)%'"
         sql = re.sub(pattern, rf"{col} = \1", sql)
+
+    # Kolom teks numerik (seperti r.number) tetap pakai string literal
+    str_cols = ['r.number', 'a.article_number']
+    for col in str_cols:
+        pattern = rf"{col}\s+ILIKE\s+'%(\d+)%'"
+        sql = re.sub(pattern, rf"{col} = '\1'", sql)
+
     return sql
 
 # ============================ GENERATE SQL ============================
