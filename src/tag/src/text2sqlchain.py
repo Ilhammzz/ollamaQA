@@ -102,12 +102,17 @@ Ikuti peraturan ketat berikut:
 3. Jika ada lebih dari satu tabel, selalu gunakan alias tabel untuk menghindari ambiguitas (contoh: `a.article_number`, `r.title`).
 4. Untuk pencarian isi teks atau konten hukum, gunakan `ILIKE '%kata%'`.
 5. Untuk kolom yang bertipe angka (integer), seperti `year` gunakan operator `=` saja (bukan ILIKE).
-6. Jika pertanyaan mengandung istilah seperti “arti istilah” atau “definisi”, gunakan tabel `definitions`.
-7. Untuk isi pasal, kewajiban, hak, sanksi, gunakan tabel `articles` dan JOIN ke `regulations`.
-8. Jika menyebutkan jenis peraturan (seperti 'PERMENKOMINFO', 'UU'), filter pakai `short_type`, `number`, dan `year`.
-9. Selalu tambahkan `LIMIT {top_k}` di akhir query, kecuali diminta sebaliknya.
-10. Jika tidak yakin dengan query, **lebih baik hasilkan query kosong** (`SELECT 'Query tidak dapat dibuat dengan informasi yang tersedia';`) daripada membuat query yang akan error.
-11. Format akhir HARUS dibungkus dalam blok ```sql ... ``` tanpa penjelasan tambahan apa pun.
+6. Jika kamu tidak yakin nama kolomnya, lebih baik kosongkan atau gunakan hanya kolom yang ada seperti `title`, `text`, `year`, `number`, `article_number`, `name`, atau `status`.
+7. Jika pengguna menanyakan hal yang tidak bisa dijawab hanya dengan skema ini, hasilkan query kosong:
+```sql
+SELECT article_number FROM articles a WHERE a.article_number = '9999'
+```
+8. Jika pertanyaan mengandung istilah seperti “arti istilah” atau “definisi”, gunakan tabel `definitions`.
+9. Untuk isi pasal, kewajiban, hak, sanksi, gunakan tabel `articles` dan JOIN ke `regulations`.
+10. Jika menyebutkan jenis peraturan (seperti 'PERMENKOMINFO', 'UU'), filter pakai `short_type`, `number`, dan `year`.
+11. Selalu tambahkan `LIMIT {top_k}` di akhir query, kecuali diminta sebaliknya.
+12. Jika tidak yakin dengan query, **lebih baik hasilkan query kosong** (`SELECT 'Query tidak dapat dibuat dengan informasi yang tersedia';`) daripada membuat query yang akan error.
+13. Format akhir HARUS dibungkus dalam blok ```sql ... ``` tanpa penjelasan tambahan apa pun.
 
 Contoh:
 Pertanyaan: Apa isi Pasal 10 dari PERMENKOMINFO Nomor 4 Tahun 2016?
@@ -117,6 +122,7 @@ FROM articles a
 JOIN regulations r ON a.regulation_id = r.id
 WHERE r.short_type = 'PERMENKOMINFO' AND r.number = '4' AND r.year = 2016 AND a.article_number = '10'
 LIMIT {top_k};
+```
 """
 
 PROMPT_SUFFIX_ID = """Gunakan hanya tabel berikut:
@@ -147,7 +153,7 @@ def get_sql_chain(llm, mode="zero-shot"):
 
 def fix_ilike_for_integers(sql: str) -> str:
     """
-    Mengganti ILIKE '%...' pada kolom integer menjadi operator '='
+    Deteksi dan ganti penggunaan ILIKE pada kolom integer menjadi operator '='
     """
     int_cols = ['r.year']
     for col in int_cols:
@@ -155,73 +161,27 @@ def fix_ilike_for_integers(sql: str) -> str:
         sql = re.sub(pattern, rf"{col} = \1", sql)
     return sql
 
-def remove_invalid_joins_and_conditions(sql: str, valid_columns: list) -> str:
-    """
-    Menghapus JOIN dan kondisi WHERE yang menggunakan kolom tidak valid.
-    """
-    # Hapus JOINs dengan kolom tak valid
-    join_pattern = re.compile(r"(JOIN\s+\w+\s+\w+\s+ON\s+[^;]+?)(?=\bJOIN\b|\bWHERE\b|\Z)", re.IGNORECASE | re.DOTALL)
-    for match in join_pattern.findall(sql):
-        join_cols = re.findall(r"\b\w+\.\w+\b", match)
-        if any(col not in valid_columns for col in join_cols):
-            sql = sql.replace(match, "")  # remove entire JOIN block
-
-    # Hapus kondisi WHERE/AND/OR dengan kolom tak valid
-    condition_pattern = re.compile(r"(\b\w+\.\w+\b)\s*(=|ILIKE|>|<|!=|IN)\s*('[^']*'|\d+)", re.IGNORECASE)
-    for match in condition_pattern.findall(sql):
-        col = match[0]
-        if col not in valid_columns:
-            full_expr = f"{col} {match[1]} {match[2]}"
-            sql = re.sub(rf"(\bAND\b|\bOR\b)?\s*{re.escape(full_expr)}", "", sql, flags=re.IGNORECASE)
-
-    # Bersihkan spasi/AND/OR berlebih
-    sql = re.sub(r"\b(AND|OR)\b\s*(AND|OR)?", "", sql, flags=re.IGNORECASE)
-    sql = re.sub(r"\s+", " ", sql).strip()
-    return sql
-
-def extract_sql_block(text: str) -> str:
-    """
-    Menangkap isi antara ```sql ... ```
-    """
-    match = re.search(r"```sql\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
-    if match:
-        return match.group(1).strip()
-    return None
-
+# ============================ GENERATE SQL ============================
 def generate_sql(schema: str, question: str, top_k: int = 100, shot_mode: str = "zero-shot", llm_mode: str = "gemini") -> str:
     """
-    Generate SQL query dari pertanyaan pengguna, dengan parsing blok SQL dan validasi sintaks.
+    Generate SQL query dari pertanyaan pengguna.
+
+    Args:
+        schema (str): Informasi struktur tabel.
+        question (str): Pertanyaan hukum dari user.
+        top_k (int): Batas maksimum hasil.
+        shot_mode (str): 'zero-shot' atau 'few-shot'
+        llm_mode (str): 'gemini' atau 'ollama'
     """
     llm = init_llm(llm_mode)
-    prompt = POSTGRES_PROMPT_FEWSHOT_ID if shot_mode == "few-shot" else POSTGRES_PROMPT_ID
-    chain = LLMChain(llm=llm, prompt=prompt)
-
+    chain = get_sql_chain(llm, mode=shot_mode)
     inputs = {
         "input": question,
         "table_info": schema,
         "top_k": top_k
     }
-
-    try:
-        raw_output = chain.run(inputs).strip()
-    except Exception:
-        return "```sql\nSELECT 'Gagal membangkitkan query karena LLM error';\n```"
-
-    extracted_sql = extract_sql_block(raw_output)
-    if not extracted_sql:
-        return "```sql\nSELECT 'Tidak ditemukan blok ```sql dalam response.';\n```"
-
-    # Perbaikan logika dan validasi
-    fixed_sql = fix_ilike_for_integers(extracted_sql)
-
-    valid_cols = [
-        'a.article_number', 'a.text', 'a.title', 'a.status', 'a.id', 'a.regulation_id',
-        'r.id', 'r.title', 'r.short_type', 'r.type', 'r.number', 'r.year', 'r.status',
-        'd.id', 'd.name', 'd.definition', 'd.regulation_id'
-    ]
-    cleaned_sql = remove_invalid_joins_and_conditions(fixed_sql, valid_cols)
-
-    if not cleaned_sql.strip().lower().startswith("select"):
-        return "```sql\nSELECT 'Query gagal dibentuk karena banyak kolom tidak sesuai skema';\n```"
-
-    return f"```sql\n{cleaned_sql.strip()}\n```"
+    query_raw = chain.run(inputs).strip()
+    query_fixed = fix_ilike_for_integers(query_raw)
+    return query_fixed
+    #return chain.run(inputs).strip()
+    
