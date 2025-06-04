@@ -89,40 +89,33 @@ WHERE
 """
 
 # ============================ PROMPT TEMPLATE ============================
-_postgres_prompt_id = """Kamu adalah seorang ahli SQL untuk sistem hukum Indonesia.
+_postgres_prompt_id = """Kamu adalah seorang pakar SQL PostgreSQL dan hukum Indonesia. Tugasmu adalah mengubah pertanyaan hukum dari pengguna menjadi SQL query **yang benar-benar valid** dan **bisa langsung dijalankan tanpa error** pada database PostgreSQL.
 
-Tugasmu adalah mengubah pertanyaan hukum dari pengguna menjadi query SQL PostgreSQL yang valid dan efisien, berdasarkan struktur database berikut:
+Perhatikan struktur tabel berikut ini:
 
 {table_info}
 
-Ikuti aturan berikut:
-- Gunakan HANYA nama tabel dan kolom yang terdapat di {table_info}.
-- Jangan membuat asumsi nama tabel atau kolom yang tidak ada dalam {table_info}.
-- Jangan gunakan SELECT *. Ambil hanya kolom yang relevan untuk menjawab pertanyaan.
-- Gunakan ILIKE untuk pencocokan teks jika pengguna menanyakan isi pasal atau konten hukum.
-- Jika pertanyaan menyebutkan pelaku hukum tertentu seperti "penyelenggara sistem elektronik", "pemerintah", atau "masyarakat", maka pastikan klausa pencarian juga mencakup entitas tersebut menggunakan ILIKE.
-- Saat membuat klausa pencarian menggunakan `ILIKE`, gunakan juga padanan kata hukum yang lazim digunakan dalam dokumen peraturan Indonesia.
-- Prioritaskan pencarian yang semantik-relevan dan tidak terlalu literal, agar mencakup lebih banyak kemungkinan hasil.
-- Untuk pertanyaan yang tidak terlalu spesifik, gabungkan kondisi pencarian menggunakan `OR`** bukan `AND`, agar hasil pencarian lebih luas dan tidak kehilangan konteks penting.
-- Jika pertanyaan mengandung singkatan atau akronim, bentuk kueri SQL hanya menggunakan bentuk lengkap tanpa bentuk singkatannya
-- Jika pertanyaan berkaitan dengan definisi istilah, gunakan tabel "definitions".
-- Gunakan tabel "definitions" hanya jika pertanyaan merujuk pada istilah hukum formal yang memiliki definisi eksplisit, seperti: "Apa arti", "Apa definisi", atau jika konteks menunjukkan bahwa istilah tersebut memang biasa didefinisikan secara langsung dalam hukum.
-- Namun jika pertanyaan mengandung frasa konseptual yang bukan istilah baku, seperti "pemetaan urusan pemerintahan daerah", carilah di tabel "articles" yang memuat isi peraturan atau penjelasan administratif.
-- Jika pertanyaan berkaitan dengan isi pasal, kewajiban, hak, atau sanksi, gunakan tabel "articles", dan JOIN ke "regulations" untuk mendapatkan nama regulasi.
-- Semua regulasi dalam database ini sudah terbatas pada bidang teknologi informasi, jadi tidak perlu filter seperti `kategori = 'teknologi informasi'`.
-- Jika pertanyaan menyebutkan jenis regulasi seperti 'Undang-Undang (UU)', 'Peraturan Pemerintah (PP)', 'PERMENKOMINFO', dll, maka kamu HARUS menyertakan filter berdasarkan kolom `short_type`, `number`, dan `year`.
-- Pada tabel 'regulations', type adalah jenis peraturan, dan short_type adalah singkatan dari jenis peraturan.
-- Tabel `articles` punya kolom `status` yang nilainya langsung `'effective'` atau `'ineffective'` yang dapat digunakan untuk mengetahui status peraturan tersebut (masih berlaku/tidak berlaku).
-- Tabel 'regulations relations' memiliki kolom `relation_type` yang menunjukkan hubungan antar peraturan, yaitu 'mengubah', dan 'diubah oleh'. Gunakan ini untuk pertanyaan yang berkaitan dengan perubahan peraturan.
-- Jika pertanyaan berkaitan dengan status peraturan, ambil juga kolom 'status' nya.
-- Gunakan tabel article_relations jika pengguna menanyakan apakah sebuah pasal diamandemen.
-- Selalu gunakan LIMIT {top_k} untuk membatasi jumlah hasil, kecuali jika diminta lain oleh pengguna.
-- Jangan tulis ulang pertanyaan pengguna. Jangan tambahkan penjelasan.
-- Format akhir HARUS diawali dengan ```sql dan diakhiri dengan ``` seperti ini, tanpa tambahan apa pun:
+Ikuti peraturan ketat berikut:
 
+1. **JANGAN** membuat atau menebak nama kolom atau nama tabel. Hanya gunakan nama kolom dan nama tabel **yang benar-benar ada** di atas ({table_info}).
+2. **JANGAN gunakan SELECT \***. Hanya ambil kolom yang relevan.
+3. Jika ada lebih dari satu tabel, selalu gunakan alias tabel untuk menghindari ambiguitas (contoh: `a.article_number`, `r.title`).
+4. Untuk pencarian isi teks atau konten hukum, gunakan `ILIKE '%kata%'`.
+5. Jika pertanyaan mengandung istilah seperti “arti istilah” atau “definisi”, gunakan tabel `definitions`.
+6. Untuk isi pasal, kewajiban, hak, sanksi, gunakan tabel `articles` dan JOIN ke `regulations`.
+7. Jika menyebutkan jenis peraturan (seperti 'PERMENKOMINFO', 'UU'), filter pakai `short_type`, `number`, dan `year`.
+8. Selalu tambahkan `LIMIT {top_k}` di akhir query, kecuali diminta sebaliknya.
+9. Jika tidak yakin dengan query, **lebih baik hasilkan query kosong** (`SELECT 'Query tidak dapat dibuat dengan informasi yang tersedia';`) daripada membuat query yang akan error.
+10. Format akhir HARUS dibungkus dalam blok ```sql ... ``` tanpa penjelasan tambahan apa pun.
+
+Contoh:
+Pertanyaan: Apa isi Pasal 10 dari PERMENKOMINFO Nomor 4 Tahun 2016?
 ```sql
-    SELECT ...
-```
+SELECT a.article_number, a.text
+FROM articles a
+JOIN regulations r ON a.regulation_id = r.id
+WHERE r.short_type = 'PERMENKOMINFO' AND r.number = '4' AND r.year = '2016' AND a.article_number = '10'
+LIMIT {top_k};
 """
 
 PROMPT_SUFFIX_ID = """Gunakan hanya tabel berikut:
