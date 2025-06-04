@@ -101,7 +101,7 @@ Ikuti peraturan ketat berikut:
 2. **JANGAN gunakan SELECT \***. Hanya ambil kolom yang relevan.
 3. Jika ada lebih dari satu tabel, selalu gunakan alias tabel untuk menghindari ambiguitas (contoh: `a.article_number`, `r.title`).
 4. Untuk pencarian isi teks atau konten hukum, gunakan `ILIKE '%kata%'`.
-5. Untuk kolom yang bertipe angka (integer), seperti `year` gunakan operator `=` saja (bukan ILIKE).
+5. Untuk kolom regulation.year yang bertipe angka (integer), seperti `year` gunakan operator `=` saja (bukan ILIKE).
 6. Jika kamu tidak yakin nama kolomnya, lebih baik kosongkan atau gunakan hanya kolom yang ada seperti `title`, `text`, `year`, `number`, `article_number`, `name`, atau `status`.
 7. Jika pengguna menanyakan hal yang tidak bisa dijawab hanya dengan skema ini, hasilkan query kosong:
 ```sql
