@@ -146,41 +146,51 @@ def get_sql_chain(llm, mode="zero-shot"):
 # sql_chain_fewshot = LLMChain(llm=llm, prompt=POSTGRES_PROMPT_FEWSHOT_ID)
 
 def fix_ilike_for_integers(sql: str) -> str:
+    """
+    Mengganti ILIKE '%...' pada kolom integer menjadi operator '='
+    """
     int_cols = ['r.year']
     for col in int_cols:
         pattern = rf"{col}\s+ILIKE\s+'%(\d+)%'"
         sql = re.sub(pattern, rf"{col} = \1", sql)
     return sql
 
-# Hapus bagian yang menggunakan kolom tidak valid
-def remove_invalid_columns(sql: str, valid_columns: list) -> str:
+def remove_invalid_joins_and_conditions(sql: str, valid_columns: list) -> str:
     """
-    Menghapus kondisi WHERE/JOIN yang mengandung kolom tidak dikenal dari SQL.
+    Menghapus JOIN dan kondisi WHERE yang menggunakan kolom tidak valid.
     """
-    # Pola: alias.nama_kolom atau nama_kolom saja
-    pattern = re.compile(r"([a-zA-Z_]+\.[a-zA-Z_]+|[a-zA-Z_]+)\s*(=|ILIKE|IN|>|<|!=)\s*[^ \n()]+", re.IGNORECASE)
+    # Hapus JOINs dengan kolom tak valid
+    join_pattern = re.compile(r"(JOIN\s+\w+\s+\w+\s+ON\s+[^;]+?)(?=\bJOIN\b|\bWHERE\b|\Z)", re.IGNORECASE | re.DOTALL)
+    for match in join_pattern.findall(sql):
+        join_cols = re.findall(r"\b\w+\.\w+\b", match)
+        if any(col not in valid_columns for col in join_cols):
+            sql = sql.replace(match, "")  # remove entire JOIN block
 
-    for match in pattern.finditer(sql):
-        col = match.group(1)
+    # Hapus kondisi WHERE/AND/OR dengan kolom tak valid
+    condition_pattern = re.compile(r"(\b\w+\.\w+\b)\s*(=|ILIKE|>|<|!=|IN)\s*('[^']*'|\d+)", re.IGNORECASE)
+    for match in condition_pattern.findall(sql):
+        col = match[0]
         if col not in valid_columns:
-            full_expr = match.group(0)
-            # Hapus ekspresi beserta klausa logika (AND/OR)
-            sql = re.sub(rf"(\bAND\b|\bOR\b)?\s*{re.escape(full_expr)}", "", sql)
+            full_expr = f"{col} {match[1]} {match[2]}"
+            sql = re.sub(rf"(\bAND\b|\bOR\b)?\s*{re.escape(full_expr)}", "", sql, flags=re.IGNORECASE)
 
+    # Bersihkan spasi/AND/OR berlebih
+    sql = re.sub(r"\b(AND|OR)\b\s*(AND|OR)?", "", sql, flags=re.IGNORECASE)
+    sql = re.sub(r"\s+", " ", sql).strip()
     return sql
 
-
-# Ekstraksi isi dari blok ```sql ... ```
 def extract_sql_block(text: str) -> str:
+    """
+    Menangkap isi antara ```sql ... ```
+    """
     match = re.search(r"```sql\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
     if match:
         return match.group(1).strip()
     return None
 
-# Fungsi utama
 def generate_sql(schema: str, question: str, top_k: int = 100, shot_mode: str = "zero-shot", llm_mode: str = "gemini") -> str:
     """
-    Generate SQL query dari pertanyaan pengguna, dengan parsing dan validasi blok SQL.
+    Generate SQL query dari pertanyaan pengguna, dengan parsing blok SQL dan validasi sintaks.
     """
     llm = init_llm(llm_mode)
     prompt = POSTGRES_PROMPT_FEWSHOT_ID if shot_mode == "few-shot" else POSTGRES_PROMPT_ID
@@ -194,29 +204,24 @@ def generate_sql(schema: str, question: str, top_k: int = 100, shot_mode: str = 
 
     try:
         raw_output = chain.run(inputs).strip()
-    except Exception as e:
+    except Exception:
         return "```sql\nSELECT 'Gagal membangkitkan query karena LLM error';\n```"
 
-    # Ambil isi blok ```sql ... ```
     extracted_sql = extract_sql_block(raw_output)
     if not extracted_sql:
         return "```sql\nSELECT 'Tidak ditemukan blok ```sql dalam response.';\n```"
 
-    # Fix penggunaan ILIKE pada integer
+    # Perbaikan logika dan validasi
     fixed_sql = fix_ilike_for_integers(extracted_sql)
 
-    # Kolom yang valid (sesuaikan dengan struktur skemamu)
     valid_cols = [
         'a.article_number', 'a.text', 'a.title', 'a.status', 'a.id', 'a.regulation_id',
         'r.id', 'r.title', 'r.short_type', 'r.type', 'r.number', 'r.year', 'r.status',
         'd.id', 'd.name', 'd.definition', 'd.regulation_id'
     ]
-    cleaned_sql = remove_invalid_columns(fixed_sql, valid_cols)
+    cleaned_sql = remove_invalid_joins_and_conditions(fixed_sql, valid_cols)
 
-    # Fallback jika query dibersihkan terlalu banyak
-    if not cleaned_sql.strip() or "-- removed_invalid_column" in cleaned_sql and "SELECT" not in cleaned_sql:
-        return "```sql\nSELECT 'Query gagal dibuat karena banyak kolom tidak sesuai skema';\n```"
+    if not cleaned_sql.strip().lower().startswith("select"):
+        return "```sql\nSELECT 'Query gagal dibentuk karena banyak kolom tidak sesuai skema';\n```"
 
     return f"```sql\n{cleaned_sql.strip()}\n```"
-    #return chain.run(inputs).strip()
-    
