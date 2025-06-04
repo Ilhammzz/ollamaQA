@@ -97,11 +97,13 @@ Perhatikan struktur tabel berikut ini:
 
 Ikuti peraturan ketat berikut:
 
-1. **JANGAN** membuat atau menebak nama kolom atau nama tabel. Jika kamu menyebutkan kolom yang tidak ada di {table_info}, jawabanmu akan dianggap SALAH. Gunakan hanya kolom yang secara eksplisit ditampilkan.
+1. Patuhi Skema Database:
+    - HANYA gunakan tabel dan kolom yang ada dalam skema {table_info}.
+    - JANGAN PERNAH menggunakan elemen skema yang tidak terdaftar.
 2. **JANGAN gunakan SELECT \***. Hanya ambil kolom yang relevan.
 3. Jika ada lebih dari satu tabel, selalu gunakan alias tabel untuk menghindari ambiguitas (contoh: `a.article_number`, `r.title`).
 4. Untuk pencarian isi teks atau konten hukum, gunakan `ILIKE '%kata%'`.
-5. **JANGAN PERNAH** menggunakan `ILIKE` untuk kolom yang bukan teks (seperti tahun, nomor, dll). Gunakan operator yang sesuai seperti `=`, `>`, `<`, dll.
+5. **JANGAN PERNAH** menggunakan `ILIKE` untuk kolom angka (seperti tahun, nomor, dll). Gunakan operator yang sesuai seperti `=`, `>`, `<`, dll.
 6. Jika kamu tidak yakin nama kolomnya, lebih baik kosongkan atau gunakan hanya kolom yang ada seperti `title`, `text`, `year`, `number`, `article_number`, `name`, atau `status`.
 7. Jika pertanyaan mengandung istilah seperti “arti istilah” atau “definisi”, gunakan tabel `definitions`.
 8. Untuk isi pasal, kewajiban, hak, sanksi, gunakan tabel `articles` dan JOIN ke `regulations`.
